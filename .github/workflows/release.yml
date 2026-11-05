@@ -1,0 +1,79 @@
+# When a release is published: validates its package assets (<id>-<ver>.zip or .part<N>.zip) with the validator of
+# the catalog and, if they pass, asks the index to check them now instead of waiting for its cron
+# (11-catalog-distribution.md 4.2, last paragraph). The index checks everything again itself: nothing here can
+# publish a version.
+name: release
+
+on:
+  release:
+    types: [published, edited]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (v1.2.3)"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    if: ${{ github.event.repository.name != 'template' && (github.event_name == 'workflow_dispatch' || !github.event.release.draft) }}
+    runs-on: ubuntu-latest
+    env:
+      INDEX_REPO: ${{ vars.CATALOG_INDEX_REPO || format('{0}/index', github.repository_owner) }}
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      ADDON_ID: ${{ github.event.repository.name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.INDEX_REPO }}
+          path: index
+          sparse-checkout: |
+            tools
+            source.ltx
+            tags.ltx
+            reserved_ids.ltx
+            moderation.ltx
+            game_releases.ltx
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Download the package assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          case "$TAG" in v[0-9]*.[0-9]*.[0-9]*) ;; *) echo "::error::the tag must be v<MAJOR.MINOR.PATCH>: $TAG"; exit 1;; esac
+          mkdir assets
+          gh release download "$TAG" --repo "${{ github.repository }}" --dir assets --pattern "${ADDON_ID}-*.zip"
+          ls -la assets
+      - name: Validate the package
+        id: validate
+        run: |
+          set +e
+          python index/tools/validator/gw_catalog.py validate --assets-dir assets \
+            --id "$ADDON_ID" --version "${TAG#v}" --index index --format md --out report.md
+          code=$?
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          cat report.md
+          exit $code
+      # Optional: a GitHub App of the catalog with only "Actions: write" on the index repo (see catalog/README.md).
+      # Without vars.CATALOG_DISPATCH_APP_ID the index picks the release up at its next cron run (every 30 min).
+      - name: Token for the index
+        id: app
+        if: ${{ vars.CATALOG_DISPATCH_APP_ID != '' }}
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.CATALOG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.CATALOG_DISPATCH_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: index
+      - name: Ask the index to check the release now
+        if: ${{ steps.app.outputs.token != '' }}
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        run: gh workflow run build-index.yml --repo "$INDEX_REPO" -f only="$ADDON_ID"

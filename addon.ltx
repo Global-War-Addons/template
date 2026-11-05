@@ -1,0 +1,23 @@
+; Манифест аддона. Тот же файл кладётся в корень пакета (zip) каждой версии.
+; Формат и поля: wiki/doc/plugins/manifest.md. Комментарий - от ";" или "//" до конца строки
+; (движок режет "//" везде, поэтому ссылок https:// в этом файле нет - они в catalog/catalog.ltx).
+; Плейсхолдеры {{...}} заполняет бот каталога при создании репо; если репо создано вручную - заполните сами.
+
+[addon]
+id       = {{id}}       ; = имя репо: a-z 0-9 _, до 64 символов
+version  = 0.1.0        ; MAJOR.MINOR.PATCH; релиз этой версии - тег v0.1.0
+type     = {{type}}     ; content | graphics | audio | script | ui | localization | library | location
+api_min  = 0.1.0        ; минимальная версия API аддонов (совместимость в лаунчере, 11 §6)
+; game_version = v1.4.0 ; тег игры, на которой сделаны ЗАМЕНЫ файлов базы целиком (.ltx/.xml/.script) - нужен дельте слияния
+; depends      = gw_npc, other_addon >=1.2.0
+; load_after   = other_addon
+
+; Опасные возможности Lua-кода. Сканер каталога ищет их в скриптах; не объявленная - ошибка публикации,
+; новая относительно прошлой версии - ручная проверка модератором.
+[capabilities]
+; fs_write   ; io.open на запись, os.remove/rename, lfs.mkdir ...
+; ffi        ; ffi.*, package.loadlib
+; os_exec    ; os.execute, io.popen
+
+; [lua]
+; entry = {{id}}_main   ; gamedata\scripts\{{id}}_main.script с функцией on_load(ctx)
