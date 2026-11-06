@@ -256,6 +256,17 @@ gh release create v1.2.0 dist/*.zip --title "1.2.0" --notes-file CHANGELOG.md
 gh release create v1.3.0 dist/*.zip --prerelease --notes-file CHANGELOG.md
 ```
 
+From the GlobalWar launcher (no Python or `gh` needed): the "Addons" view → **"Author mode"**. The launcher checks the
+working folder with the same rules as the validator (except the Lua scanner, references and base replacements — CI
+checks those), packs it into `<id>-<ver>.zip` or 2 GiB parts (deflate by default; for zstd the local validator needs
+Python 3.14+), creates the `v<version>` release as a **draft**, uploads and verifies every part (size, sha256) and only
+then publishes it — CI never sees an incomplete release. Running it again resumes the upload. It needs a fine-grained
+GitHub token with **Contents: Read and write** on this repository only; a remembered token is stored under DPAPI on
+Windows (on Linux/macOS it is only obfuscated). The launcher never changes a published release on its own: its assets
+can be replaced only with the explicit "Allow changing a release already published" checkbox and a confirmation (see below
+why you shouldn't). Details: the project wiki, section "Addons", page "Publishing to the catalog"
+(`doc/addons/publishing.md`).
+
 **Don't replace the assets of a published version.** If CI has already accepted a version (it is in the catalog or
 under moderation) and an asset is replaced afterwards, CI yanks the version (`yanked`) and opens an Issue for the
 moderators. The fix is a new version (`1.2.1`, tag `v1.2.1`). The exception is a version the validator rejected: you
