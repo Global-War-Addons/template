@@ -1,0 +1,51 @@
+# Checks addon.ltx and catalog/ of this repo with the validator of the catalog (the same one the index CI runs).
+# Only a hint for the author: what gets published is decided by the CI of the index repo (11-catalog-distribution.md
+# 4.2), which this workflow cannot influence.
+name: validate
+
+on:
+  push:
+    paths: ["addon.ltx", "catalog/**", ".github/workflows/validate.yml"]
+  pull_request:
+    paths: ["addon.ltx", "catalog/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    # the template repo itself keeps its {{...}} placeholders
+    if: ${{ github.event.repository.name != 'template' }}
+    runs-on: ubuntu-latest
+    env:
+      # The index repo of the catalog: its tools/ (validator) and its tags.ltx / reserved_ids.ltx.
+      # A third-party catalog sets the repo variable CATALOG_INDEX_REPO (owner/repo); default: <owner>/index.
+      INDEX_REPO: ${{ vars.CATALOG_INDEX_REPO || format('{0}/index', github.repository_owner) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: addon
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ env.INDEX_REPO }}
+          path: index
+          sparse-checkout: |
+            tools
+            source.ltx
+            tags.ltx
+            reserved_ids.ltx
+            moderation.ltx
+            game_releases.ltx
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - name: Validate addon.ltx and catalog/
+        run: |
+          set +e
+          python index/tools/validator/gw_catalog.py validate-repo addon \
+            --id "${{ github.event.repository.name }}" --index index --format md --out report.md
+          code=$?
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          cat report.md
+          exit $code

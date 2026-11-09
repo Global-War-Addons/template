@@ -1,0 +1,64 @@
+# When a release is published: validates its package assets (<id>-<ver>.zip or .part<N>.zip) with the validator of
+# the catalog - a hint for the author in the summary of the run. The index finds the release by itself: build-index.yml
+# polls the organization every 15 minutes (decision 63: no App "dispatch", no secret in the addon repos). The index
+# checks everything again itself: nothing here can publish a version.
+name: release
+
+on:
+  release:
+    # not "edited": an edit of the notes is no new package
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (v1.2.3)"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    if: ${{ github.event.repository.name != 'template' && (github.event_name == 'workflow_dispatch' || !github.event.release.draft) }}
+    runs-on: ubuntu-latest
+    env:
+      INDEX_REPO: ${{ vars.CATALOG_INDEX_REPO || format('{0}/index', github.repository_owner) }}
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      ADDON_ID: ${{ github.event.repository.name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ env.INDEX_REPO }}
+          path: index
+          sparse-checkout: |
+            tools
+            source.ltx
+            tags.ltx
+            reserved_ids.ltx
+            moderation.ltx
+            game_releases.ltx
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - name: Download the package assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          case "$TAG" in v[0-9]*.[0-9]*.[0-9]*) ;; *) echo "::error::the tag must be v<MAJOR.MINOR.PATCH>: $TAG"; exit 1;; esac
+          mkdir assets
+          gh release download "$TAG" --repo "${{ github.repository }}" --dir assets --pattern "${ADDON_ID}-*.zip"
+          ls -la assets
+      - name: Validate the package
+        id: validate
+        run: |
+          set +e
+          python index/tools/validator/gw_catalog.py validate --assets-dir assets \
+            --id "$ADDON_ID" --version "${TAG#v}" --index index --format md --out report.md
+          code=$?
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          cat report.md
+          exit $code

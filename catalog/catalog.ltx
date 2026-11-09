@@ -1,0 +1,15 @@
+; Карточка аддона в каталоге (11-catalog-distribution.md §3.2). В пакет игрока не входит.
+; Поля с суффиксом _<язык> (name_ru, summary_en ...) - перевод; без суффикса - вариант без языка.
+; "//" внутри ссылок не комментарий: комментарий - только ";" или " //" после пробела.
+
+[catalog]
+name        = {{name}}
+summary     = {{summary}}
+tags        =                  ; через запятую, только из tags.ltx репо index
+authors     = {{authors}}      ; авторы оригинала, свободный текст через запятую
+maintainers = {{maintainer}}   ; GitHub-логины тех, кто публикует
+license     = {{license}}      ; SPDX (MIT, CC-BY-4.0 ...) или custom; не задано - CC-BY-NC-4.0
+source      = {{source}}
+permission  = {{permission}}   ; ссылка на разрешение, если публикует не автор
+; homepage  = https://...
+; donate    = https://...
